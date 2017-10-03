@@ -1,2 +1,6 @@
-# notes_tools
-Tools for note taking
+# Tools for notes
+
+fix_notes: reports deviations from the note format.
+
+
+

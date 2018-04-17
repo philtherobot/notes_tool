@@ -989,4 +989,4 @@ int main(int argc, char ** argv)
 	}
 }
 
-#include "fix_notes_tests.cpp"
+#include "notes_tool_tests.cpp"

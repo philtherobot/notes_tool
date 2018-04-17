@@ -1,0 +1,6 @@
+#!/bin/sh
+
+pushd /cygdrive/c/Users/philippe/Dropbox/notes > /dev/null
+ls | ag -i "$*"
+ag -i -H "$*" *.md
+popd  > /dev/null

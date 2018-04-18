@@ -1,6 +1,52 @@
 #!/bin/sh
 
+function help
+{
+    echo "Usage: $(basename $0) [OPTION] TERM1 TERM2 ..."
+    echo "Searches for terms in notes."
+    echo ""
+    echo "Options:"
+    echo "  -f    search only file names"
+    echo "  -c    search only contents"
+    echo "  -i    case insensitive"
+    echo "  -w    word search"
+    echo "  -h    help"
+    echo ""
+    echo "Default is to search both file names and contents."
+    echo ""
+    echo "Caveat: hits in contents repeat the file name if"
+    echo "searching both file names and contents."
+    echo ""
+    exit 1
+}
+
+search_fname=1
+search_contents=1
+case_sens=-s
+word=
+
+while getopts fcihw opt ; do
+  case $opt in
+    f) search_contents=0 ;;
+    c) search_fname=0    ;;
+    i) case_sens=-i      ;;
+    w) word=-w           ;;
+    h) help ;;
+    \?) help ;;
+  esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -lt 1 ] ; then 
+    echo missing search term
+    help
+fi
+
 pushd /cygdrive/c/Users/philippe/Dropbox/notes > /dev/null
-ls | ag -i "$*"
-ag -i -H "$*" *.md
+
+if [ $search_fname    -eq 1 ] ; then ls | ag $case_sens $word    "$*"      ; fi
+
+if [ $search_contents -eq 1 ] ; then      ag $case_sens $word -H "$*" *.md ; fi
+
 popd  > /dev/null

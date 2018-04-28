@@ -43,7 +43,9 @@ if [ $# -lt 1 ] ; then
     help
 fi
 
-pushd /cygdrive/c/Users/philippe/Dropbox/notes > /dev/null
+notes_dir=${NOTES_ROOT:-/cygdrive/c/Users/philippe/Dropbox/notes}
+
+pushd "$notes_dir" > /dev/null
 
 if [ $search_fname    -eq 1 ] ; then ls | ag $case_sens $word    "$*"      ; fi
 

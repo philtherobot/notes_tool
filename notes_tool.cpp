@@ -1044,7 +1044,7 @@ int heal_main(int, char **)
 
 int help()
 {
-    wcout << "Usage: notes_tool [-h | tests | repair | tags]\n";
+    wcout << "Usage: notes_tool [ -h | check | repair | tags | tests ]\n";
     return 0;
 }
 
@@ -1068,7 +1068,7 @@ int user_main(int argc, char ** argv)
         }
 
         vector<std::string> allowed{
-            "--help", "tests", "tags", "repair"
+            "--help", "tests", "tags", "check", "repair"
         };
 
         if( boost::range::count(allowed, what) != 1 )
@@ -1101,7 +1101,7 @@ int user_main(int argc, char ** argv)
     {
         return print_tags_main(argc, argv);
     }
-    else // checks
+    else // no argument or "check"
     {
         return normal_main(argc, argv);
     }

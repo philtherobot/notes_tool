@@ -1,6 +1,5 @@
 
 // grindtrick import googletest
-// grindtrick import pstream
 // grindtrick import boost_filesystem
 // grindtrick import boost_system
 
@@ -8,6 +7,7 @@
 #include <iostream>
 #include <iomanip>
 #include <functional>
+#include <map>
 #include <vector>
 #include <set>
 #include <sstream>
@@ -22,15 +22,27 @@
 #include <boost/range/algorithm/count.hpp>
 #include <boost/range/algorithm/count_if.hpp>
 
-using namespace std;
-using namespace std::placeholders;
-using namespace boost::filesystem;
-using namespace boost::algorithm;
-using namespace boost::range;
+
 
 template <typename T>
-using boptional = boost::optional<T>;
+using optional = boost::optional<T>;
 
+typedef std::wstring wstring;
+
+template <typename T>
+using vector = std::vector<T>;
+
+template <typename Key, typename Value>
+using map = std::map<Key, Value>;
+
+template <typename T>
+using set = std::set<T>;
+
+using std::wcout;
+using std::wcin ;
+using std::wcerr;
+
+typedef boost::filesystem::path path;
 
 wstring const SUBJECT_FIELD_NAME(L"Sujet");
 wstring const TAG_FIELD_NAME(L"\u00C9tiquettes");
@@ -38,6 +50,65 @@ wstring const TAG_FIELD_NAME(L"\u00C9tiquettes");
 /////////////////////////////////////////////////////////////////////////////
 
 vector<wstring> ignores;
+
+
+wstring string_from_path(path const & p)
+{
+    std::wstringstream ss;
+    ss << p;
+    return ss.str();
+}
+
+
+/*
+Normally would derive from std::ios_base::failure
+but it is uncatchable!  The reason is that the
+standard library throws failure for the older
+ABI and my code wants to catch failure for the
+newer ABI (or vice versa).
+
+There was an ABI change to failure because it
+is now derived from std::system instead of 
+std::runtime_error.
+
+There are two failure class types in the system,
+one for each ABI.
+
+We will work with std::system_error instead.
+
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=66145
+
+GCC bug # 66145.
+*/
+class IOStreamError : public std::system_error
+{
+    typedef std::system_error BaseType;
+
+public:
+
+    IOStreamError(path const & file_resource, 
+        BaseType const & error)
+    :
+        BaseType(error),
+        resource_( string_from_path(file_resource) )
+    {
+        what_ = "on file \"" + file_resource.string();
+        what_ += "\", error \"";
+        what_ += BaseType::what();
+        what_ += "\"";
+    }
+
+    wstring const resource_;
+
+    virtual const char * what() const noexcept
+    {
+        return what_.c_str();
+    }
+
+private:
+    std::string what_;
+};
+
 
 void load_ignore()
 {
@@ -55,8 +126,8 @@ bool is_ignored(wstring const & fn)
 {
     for(auto i: ignores)
     {
-        wregex re(i);
-        wsmatch mr;
+        std::wregex re(i);
+        std::wsmatch mr;
         
         if( regex_match(fn, mr, re) ) 
             return true;
@@ -69,7 +140,7 @@ bool is_ignored(wstring const & fn)
 bool is_input(wstring const & t, wstring const & test_for)
 {
     wstring lo(t);
-    to_lower(lo);
+    boost::algorithm::to_lower(lo);
     return lo == test_for || lo == wstring(1, test_for.front());
 }
 
@@ -117,9 +188,9 @@ public:
 class Name
 {
 public:
-    boptional<wstring> sphere;
-    boptional<wstring> project;
-    boptional<wstring> subject;
+    optional<wstring> sphere;
+    optional<wstring> project;
+    optional<wstring> subject;
 };
 
 
@@ -129,8 +200,8 @@ bool parse_filename(File const & file, Name & name_out)
 {
     name_out = Name();
 
-    wregex re(L"(\\S+) (\\S+) ([\\S ]+)");
-    wsmatch mr;
+    std::wregex re(L"(\\S+) (\\S+) ([\\S ]+)");
+    std::wsmatch mr;
     
     wstring stem = file.filename.stem().wstring();
 
@@ -157,8 +228,8 @@ bool is_tag(wstring const & t)
 {
     if( t.size() <= 1 ) return false;
     if( t[0] != L'#' ) return false;
-    if( count_if( t, iswspace ) ) return false;
-    return count( t.begin() + 1, t.end(), L'#' ) == 0;
+    if( boost::range::count_if( t, iswspace ) ) return false;
+    return std::count( t.begin() + 1, t.end(), L'#' ) == 0;
 }
 
 bool parse_tags(wstring const & tags_string, set<wstring> & tags_out)
@@ -166,7 +237,7 @@ bool parse_tags(wstring const & tags_string, set<wstring> & tags_out)
     tags_out.clear();
     set<wstring> t;
 
-    wistringstream is(tags_string);
+    std::wistringstream is(tags_string);
 
     wstring tag;
     while( is >> tag )
@@ -201,21 +272,20 @@ wstring print_tags(set<wstring> const & tags)
 
 bool parse_header_field(wstring const & line, wstring & name, wstring & body)
 {
-    wregex re(L"(\\S+):(.*)\n?");
-    wsmatch mr;
+    std::wregex re(L"(\\S+):(.*)\n?");
+    std::wsmatch mr;
     
     if( !regex_match(line, mr, re) ) 
         return false;
 
     name = mr.str(1);
-    trim(name);
+    boost::algorithm::trim(name);
 
     body = mr.str(2);
-    trim(body);
+    boost::algorithm::trim(body);
 
     return true;
 }
-
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -252,7 +322,7 @@ public:
         header.clear();
         body.clear();
 
-        wstringstream is(text);
+        std::wstringstream is(text);
         wstring line;
 
         while( getline(is, line) )
@@ -279,7 +349,7 @@ public:
             // There is an header.  Do not put the (normally present)
             // empty line in the body.
             wstring tmp(line);
-            trim(tmp);
+            boost::algorithm::trim(tmp);
 
             if( !tmp.empty() )
                 body += line + L"\n";
@@ -293,9 +363,19 @@ private:
     void load_text()
     {
         std::wifstream fs(file.filename.string());
-        wstringstream strstream;
-        strstream << fs.rdbuf();
-        text = strstream.str();
+        std::wstringstream wide_strstream;
+        wide_strstream.exceptions(std::wstringstream::failbit);
+
+        try
+        {
+            wide_strstream << fs.rdbuf();
+        }
+        catch(std::system_error const & error)
+        {
+            throw IOStreamError( file.filename, error );
+        }
+
+        text = wide_strstream.str();
     }
 
     void parse_tags()
@@ -313,21 +393,29 @@ private:
 void Note::write()
 {
     std::wofstream fs(file.filename.string());
+    fs.exceptions(std::wstringstream::failbit);
 
-    for(auto field: header)
+    try
     {
-        fs << field.first << ": " << field.second << '\n';
+        for(auto field: header)
+        {
+            fs << field.first << ": " << field.second << '\n';
+        }
+
+        if( !header.empty() ) fs << '\n';
+
+        fs << body;
     }
-
-    if( !header.empty() ) fs << '\n';
-
-    fs << body;
+    catch(std::system_error const & error)
+    {
+        throw IOStreamError( file.filename, error );
+    }
 }
 
 
 ///////////////////////////////////////////////////////////////////////
 
-wostream & operator <<(wostream & os, Note const & n)
+std::wostream & operator <<(std::wostream & os, Note const & n)
 {
     os << "Note(" << n.file.filename << ")";
     return os;
@@ -350,7 +438,7 @@ bool visit(path dir, DirectoryVisitor & visitor)
 {
     vector<path> dirs;
     vector<path> filepaths;
-    for(auto x : directory_iterator(dir))
+    for(auto x : boost::filesystem::directory_iterator(dir))
     {
         path p = x.path();
         auto fn = p.filename();
@@ -372,7 +460,7 @@ bool visit(path dir, DirectoryVisitor & visitor)
         auto predicate = [fn = file.filename](auto dir)
             { return dir.stem() == fn.stem(); };
 
-        auto it = find_if(dirs.begin(), dirs.end(), predicate);
+        auto it = std::find_if(dirs.begin(), dirs.end(), predicate);
 
         if( it != dirs.end() )
         {
@@ -390,7 +478,14 @@ bool visit(path dir, DirectoryVisitor & visitor)
 
     for(auto file: files) 
     {
-        if( !visitor.file(file) ) return false;
+        try
+        {
+            if( !visitor.file(file) ) return false;
+        }
+        catch(IOStreamError const & error)
+        {
+            std::cerr << error.what() << "\n";
+        }
     }
 
     return true;
@@ -424,7 +519,7 @@ public:
 
         if( subject_field == end )
         {
-            wostringstream os;
+            std::wostringstream os;
             os << L"missing \"" << SUBJECT_FIELD_NAME << "\" header";
             msg_ = os.str();
         }
@@ -480,7 +575,7 @@ public:
         {
             if( boost::filesystem::is_empty(annex) )
             {
-                wstringstream ss;
+                std::wstringstream ss;
                 ss << L"annex is empty: " << annex.wstring();
                 msg_ = ss.str();
             }
@@ -522,7 +617,7 @@ public:
 
         if( note_.header.find(TAG_FIELD_NAME) == end )
         {
-            wostringstream os;
+            std::wostringstream os;
             os << L"missing \"" << TAG_FIELD_NAME << "\" header";
             msg_ = os.str();
         }
@@ -534,7 +629,7 @@ class EolCheck : public BaseCheck
 public:
     explicit EolCheck(Note const & note) : BaseCheck(note)
     {
-         if( count(note_.text, L'\r') != 0 )
+        if( boost::range::count(note_.text, L'\r') != 0 )
         {
             msg_ = L"CR detected";
         }
@@ -545,12 +640,12 @@ class BaseFilenameTagCheck : public BaseCheck
 {
 public:
     BaseFilenameTagCheck(Note const & note,
-        boptional<wstring> const & fn_tag, wstring const & tag_desc) 
+        optional<wstring> const & fn_tag, wstring const & tag_desc) 
         : BaseCheck(note)
     {
         if( fn_tag )
         {
-            if( count(note_.tags, *fn_tag) == 0 )
+            if( boost::range::count(note_.tags, *fn_tag) == 0 )
             {
                 msg_ = tag_desc + L" from filename not found in tags";
             }
@@ -688,8 +783,8 @@ public:
 
     void heal()
     {
-        erase_all(note_.text, L"\r");
-        erase_all(note_.body, L"\r");
+        boost::algorithm::erase_all(note_.text, L"\r");
+        boost::algorithm::erase_all(note_.body, L"\r");
         note_.write();
     }
 
@@ -760,8 +855,8 @@ private:
             for(auto const & t: tags) 
             {
                 wcout << "  ";
-                wcout << setw(20) << left << t.first; 
-                wcout << setw(4) << right << t.second;
+                wcout << std::setw(20) <<std:: left << t.first; 
+                wcout << std::setw(4) << std::right << t.second;
                 wcout << '\n';
             }
         }
@@ -789,7 +884,7 @@ class WarningVisitor : public BaseDirectoryVisitor
 public:
     virtual bool directory(path dir)
     {
-        wstringstream ss;
+        std::wstringstream ss;
         ss << L"orphan directory found: " << dir.wstring();
         print_warning(ss.str());
         return true;
@@ -898,7 +993,7 @@ private:
 
             if( !is_all(input_) && !is_file_all_repairs(input_) )
             {
-                wcout << "Repair? (y|[n]|file|skip|all|quit) " << flush;
+                wcout << "Repair? (y|[n]|file|skip|all|quit) " << std::flush;
                 getline(wcin, input_);
             }
 
@@ -961,22 +1056,22 @@ int user_main(int argc, char ** argv)
 
     // Accepts zero or one argument.
 
-    string what;
+    std::string what;
 
     if( argc == 2 )
     {
-        what = string(argv[1]);
+        what = std::string(argv[1]);
 
         if( what == "-h" )
         {
             what = "--help";
         }
 
-        vector<string> allowed{
+        vector<std::string> allowed{
             "--help", "tests", "tags", "repair"
         };
 
-        if( count(allowed, what) != 1 )
+        if( boost::range::count(allowed, what) != 1 )
         {
             wcerr << "invalid argument, try \"--help\"\n";
             return 1;
@@ -1021,9 +1116,9 @@ int main(int argc, char ** argv)
     {
         return user_main(argc, argv);
     }
-    catch(exception const & ex)
+    catch(std::exception const & ex)
     {
-        cerr << "exception: " << ex.what() << '\n';
+        std::cerr << "exception: " << ex.what() << '\n';
         return 1;
     }
 }
